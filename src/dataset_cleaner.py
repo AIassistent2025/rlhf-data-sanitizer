@@ -9,37 +9,63 @@ class DatasetCleaner:
         self.max_length = max_length
 
     def is_gibberish(self, text):
-        # A very basic check for nonsensical strings (e.g., repeated characters)
+        """
+        Detects potential nonsensical strings based on character distribution.
+        """
+        if not text:
+            return False
+            
+        # 1. Repeated character pattern check
         if re.search(r'(.)\1{4,}', text):
             return True
-        # Check for lack of vowels (heuristic for English gibberish)
-        if not re.search(r'[aeiouAEIOU]', text):
-            return True
+            
+        # 2. Vowel-to-Consonant Ratio (Heuristic for English/Romanized text)
+        vowels = len(re.findall(r'[aeiouAEIOU]', text))
+        consonants = len(re.findall(r'[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZ]', text))
+        
+        if (vowels + consonants) > 0 and (vowels / (vowels + consonants)) < 0.1:
+            return True # Too few vowels often indicates nonsense or acronym-heavy strings
+            
+        # 3. Special character density
+        special_chars = len(re.findall(r'[^a-zA-Z0-9\s]', text))
+        if len(text) > 0 and (special_chars / len(text)) > 0.3:
+            return True # Over 30% special chars is usually a sign of corrupted data
+            
         return False
 
     def clean_text(self, text):
-        """Removes extra whitespaces and newlines."""
+        """Removes extra whitespaces, newlines, and trailing punctuation."""
         if not isinstance(text, str):
             return ""
-        return " ".join(text.split())
+        # Remove extra whitespace
+        text = " ".join(text.split())
+        return text
 
     def validate_response(self, text):
         """
-        Main validation pipeline.
-        Returns (is_valid, reason)
+        Comprehensive validation of a single model response.
+        Returns: (is_valid: bool, reason: str, metadata: dict)
         """
         cleaned = self.clean_text(text)
+        metadata = {
+            "original_length": len(text) if text else 0,
+            "cleaned_length": len(cleaned),
+            "is_empty": not bool(cleaned)
+        }
+        
+        if not cleaned:
+            return False, "Input is empty", metadata
         
         if len(cleaned) < self.min_length:
-            return False, "Too short"
+            return False, f"Too short (min {self.min_length})", metadata
         
         if len(cleaned) > self.max_length:
-            return False, "Too long"
+            return False, f"Too long (max {self.max_length})", metadata
         
         if self.is_gibberish(cleaned):
-            return False, "Detected as gibberish/pattern repeated"
+            return False, "Detected as gibberish or corrupted data", metadata
             
-        return True, "Valid"
+        return True, "Valid", metadata
 
 if __name__ == "__main__":
     cleaner = DatasetCleaner()
@@ -52,5 +78,5 @@ if __name__ == "__main__":
     ]
     
     for s in samples:
-        valid, reason = cleaner.validate_response(s)
+        valid, reason, _ = cleaner.validate_response(s)
         print(f"Sample: '{s[:30]}...' -> {valid} ({reason})")
