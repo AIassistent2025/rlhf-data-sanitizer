@@ -46,12 +46,11 @@ class BiasDetector:
         Returns: dict of findings by category
         """
         findings = {}
-        text_lower = text.lower()
-        
+
         for category, patterns in self.neutrality_patterns.items():
             discovered = []
             for p in patterns:
-                if p.search(text_lower):
+                if p.search(text):
                     discovered.append(p.pattern.replace("\\b", ""))
             if discovered:
                 findings[category] = discovered
